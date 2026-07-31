@@ -67,12 +67,17 @@ jobs:
             echo "::warning::CARGO_REGISTRY_TOKEN not set; skipping crates.io publish"
             exit 0
           fi
-          ver="$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)"
-          if cargo search c2pa-unstructured-text --limit 1 | grep -q "^c2pa-unstructured-text = \"${ver}\""; then
-            echo "crates.io already has c2pa-unstructured-text ${ver}; skipping"
-            exit 0
+          # Ask cargo rather than guessing from `cargo search`: the index can
+          # lag a publish by minutes, so a search-based guard reports "not
+          # published" for something that is, and the re-run then fails.
+          if out=$(cargo publish 2>&1); then
+            printf '%s\n' "$out"
+          elif printf '%s' "$out" | grep -q 'already exists'; then
+            echo "crates.io already has this version; skipping"
+          else
+            printf '%s\n' "$out"
+            exit 1
           fi
-          cargo publish
 
   wheels:
     name: Build wheels (${{ matrix.platform.os }} ${{ matrix.platform.target }})
