@@ -1,0 +1,40 @@
+[package]
+name = "c2pa-unstructured-text"
+version = "0.1.0"
+edition = "2021"
+description = "C2PA manifest embedding and hard binding for unstructured text using Unicode variation selectors"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/writerslogic/c2pa-unstructured-text"
+keywords = ["c2pa", "provenance", "text", "unicode", "variation-selector"]
+categories = ["encoding", "text-processing"]
+readme = "README.md"
+
+[features]
+default = []
+# Ready-made `Hasher` and `Normalizer` implementations backed by RustCrypto and
+# `unicode-normalization`, for callers who do not want to supply their own.
+# The binding algorithm itself lives in the dependency-free core: enabling this
+# adds convenience, never capability. Hosts that already provide SHA-2 and NFC
+# (a Cloudflare Worker, a browser) should leave it off and implement the two
+# traits against the runtime instead.
+hard-binding = ["dep:sha2", "dep:unicode-normalization"]
+# The v2 wrapper frame: a truncated SHA-256 checksum over the header and payload
+# so a mangled carrier fails safe (rejected) instead of decoding to wrong bytes.
+# A WritersLogic extension, not part of the published A.8 frame, so it is gated
+# to keep the default build spec-pure. Hashes through the injected `Hasher`, so
+# it adds no dependencies of its own.
+checksum-v2 = []
+# Python bindings, built with maturin/PyO3 for the PyPI distribution. Implies
+# `hard-binding`: a Python caller cannot implement the Rust `Hasher` and
+# `Normalizer` traits, so the bundled implementations are required.
+python = ["dep:pyo3", "hard-binding"]
+
+[dependencies]
+sha2 = { version = "0.10", default-features = false, optional = true }
+unicode-normalization = { version = "0.1", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pyo3 = { version = "0.25", optional = true, features = ["extension-module", "abi3-py39"] }
+
+[package.metadata.docs.rs]
+features = ["hard-binding", "checksum-v2"]
