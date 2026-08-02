@@ -2,6 +2,8 @@
 name = "c2pa-unstructured-text"
 version = "0.1.0"
 edition = "2021"
+# One MSRV across the crate family; verified with `cargo +1.87 check`.
+rust-version = "1.87"
 description = "C2PA manifest embedding and hard binding for unstructured text using Unicode variation selectors"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/writerslogic/c2pa-unstructured-text"
