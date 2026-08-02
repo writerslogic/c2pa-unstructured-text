@@ -98,7 +98,10 @@ pub mod hardbinding;
 pub mod vs;
 pub mod wrapper;
 
-#[cfg(feature = "python")]
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
+#[cfg(all(feature = "python", not(target_arch = "wasm32")))]
 mod python;
 
 pub use error::Error;

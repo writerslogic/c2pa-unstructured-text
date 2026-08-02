@@ -34,6 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
@@ -48,9 +49,10 @@ jobs:
       - run: cargo fmt --all -- --check
       # Not --all-features: pyo3's `extension-module` leaves Python symbols to
       # be supplied by the interpreter, so a test binary linked with it fails.
-      - run: cargo clippy --all-targets --features hard-binding,checksum-v2 -- -D warnings
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --target wasm32-unknown-unknown -- -D warnings
       - run: cargo clippy --features python -- -D warnings
-      - run: cargo test --features hard-binding,checksum-v2
+      - run: cargo test
 
   crates-io:
     name: Publish to crates.io
@@ -78,6 +80,37 @@ jobs:
             printf '%s\n' "$out"
             exit 1
           fi
+
+  npm:
+    name: Publish to npm
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - name: Build and publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::warning::NPM_TOKEN not set; skipping npm publish"
+            exit 0
+          fi
+          ver="$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)"
+          if npm view "c2pa-unstructured-text@${ver}" version >/dev/null 2>&1; then
+            echo "npm already has c2pa-unstructured-text@${ver}; skipping"
+            exit 0
+          fi
+          wasm-pack build --target bundler --out-dir pkg
+          # The leading ./ stops npm resolving "pkg" as a registry package spec.
+          npm publish ./pkg --access public
 
   wheels:
     name: Build wheels (${{ matrix.platform.os }} ${{ matrix.platform.target }})

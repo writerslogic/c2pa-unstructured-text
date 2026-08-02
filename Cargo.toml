@@ -1,6 +1,6 @@
 [package]
 name = "c2pa-unstructured-text"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 # One MSRV across the crate family; verified with `cargo +1.87 check`.
 rust-version = "1.87"
@@ -10,6 +10,11 @@ repository = "https://github.com/writerslogic/c2pa-unstructured-text"
 keywords = ["c2pa", "provenance", "text", "unicode", "variation-selector"]
 categories = ["encoding", "text-processing"]
 readme = "README.md"
+
+# `cdylib` is what wasm-pack and maturin need to produce a loadable module;
+# `rlib` keeps the crate usable as an ordinary Rust dependency.
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
@@ -40,3 +45,11 @@ pyo3 = { version = "0.25", optional = true, features = ["extension-module", "abi
 
 [package.metadata.docs.rs]
 features = ["hard-binding", "checksum-v2"]
+
+# The npm distribution is a `wasm32` build; `hard-binding` is not optional there
+# because a JavaScript caller cannot implement the Hasher/Normalizer traits.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+sha2 = { version = "0.10", default-features = false }
+unicode-normalization = "0.1"

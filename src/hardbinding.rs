@@ -238,8 +238,10 @@ pub fn verify_data_hash(
     }
 }
 
-/// Ready-made implementations, behind the `hard-binding` feature.
-#[cfg(feature = "hard-binding")]
+/// Ready-made implementations, behind the `hard-binding` feature — and always
+/// present on `wasm32`, where the npm distribution needs them: a JavaScript
+/// caller cannot implement the [`Hasher`] and [`Normalizer`] traits.
+#[cfg(any(feature = "hard-binding", target_arch = "wasm32"))]
 mod provided {
     use super::{Algorithm, Hasher, Normalizer};
     use sha2::{Digest, Sha256, Sha384, Sha512};
@@ -272,7 +274,7 @@ mod provided {
     }
 }
 
-#[cfg(feature = "hard-binding")]
+#[cfg(any(feature = "hard-binding", target_arch = "wasm32"))]
 pub use provided::{RustCrypto, UnicodeNfc};
 
 #[cfg(test)]
