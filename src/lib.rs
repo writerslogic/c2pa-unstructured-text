@@ -92,7 +92,10 @@
 //! No feature is enabled by default.
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
+/// Errors from locating a wrapper or validating the hard binding, and the C2PA
+/// status codes they map to.
 pub mod error;
 pub mod hardbinding;
 pub mod vs;
