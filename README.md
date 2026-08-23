@@ -1,3 +1,7 @@
+# c2pa-unstructured-text
+
+_C2PA manifest embedding and hard binding for unstructured text using Unicode variation selectors._
+
 <p align="center">
   <a href="https://crates.io/crates/c2pa-unstructured-text"><img src="https://img.shields.io/crates/v/c2pa-unstructured-text.svg" alt="crates.io"></a>
   <a href="https://docs.rs/c2pa-unstructured-text"><img src="https://docs.rs/c2pa-unstructured-text/badge.svg" alt="docs.rs"></a>
@@ -14,6 +18,7 @@ Implements the **Embedding Manifests into Unstructured Text** section of the [C2
 Hello world.<U+FEFF><variation-selector run carrying magic|version|length|manifest>
 ```
 
+> [!IMPORTANT]
 > The specification describes this method as one that **should only be used where no other embedding method is feasible**. For source code, configuration, and markup, prefer [`c2pa-structured-text`](https://crates.io/crates/c2pa-structured-text). This crate exists for the case the spec carves out: text with no container.
 
 This crate owns two things:
@@ -23,13 +28,21 @@ This crate owns two things:
 
 Signature verification, certificate trust, and assertion validation are not reimplemented here.
 
+> [!NOTE]
 > Not certified or conformance-tested by the C2PA. It implements the embedding and hard binding as specified.
 
 ## Zero dependencies by default
 
 ```toml
 [dependencies]
-c2pa-unstructured-text = "0.1"
+c2pa-unstructured-text = "0.2"
+```
+
+The same crate is published for JavaScript/WebAssembly and Python, built from this source:
+
+```bash
+npm install c2pa-unstructured-text   # wasm-bindgen build
+pip install c2pa-unstructured-text   # PyO3 abi3 wheel, CPython 3.9+
 ```
 
 The frame and the binding algorithm pull nothing in. Hashing and NFC are injected through two traits, so a host that already provides them supplies its own:
@@ -125,6 +138,7 @@ A candidate that fails to decode *beside* a valid wrapper is skipped, not
 reported: letting stray bytes carrying the magic invalidate an otherwise good
 wrapper would hand anyone who can append to the text a denial of service.
 
+> [!WARNING]
 > The specification is in tension here. Placement rule 5 says a validator "may
 > encounter multiple wrappers" and that selection "is governed by the
 > `exclusions` field", while the status-code section makes more than one valid
