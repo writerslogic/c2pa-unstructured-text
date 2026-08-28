@@ -12,7 +12,7 @@ _C2PA manifest embedding and hard binding for unstructured text using Unicode va
 
 ## Overview
 
-Implements the **Embedding Manifests into Unstructured Text** section of the [C2PA Technical Specification](https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html#_embedding_manifests_into_unstructured_text), which carries a C2PA Manifest Store inside a Unicode text stream as a run of non-rendering variation selectors, so provenance survives copy and paste between systems that have no file.
+Implements **Embedding Manifests into Unstructured Text** from the [current C2PA specification working draft](https://github.com/c2pa-org/specifications/blob/main/docs/modules/specs/partials/Embedding/Manifests_Text.adoc), which carries a C2PA Manifest Store inside a Unicode text stream as a run of non-rendering variation selectors, so provenance survives copy and paste between systems that have no file. This method is not part of the published 2.4 release; consumers should treat the wire format as draft until it ships in a released specification.
 
 ```
 Hello world.<U+FEFF><variation-selector run carrying magic|version|length|manifest>
@@ -134,9 +134,8 @@ assert!(err.is_no_manifest_located());
 assert_eq!(err.code(), None);
 ```
 
-A candidate that fails to decode *beside* a valid wrapper is skipped, not
-reported: letting stray bytes carrying the magic invalidate an otherwise good
-wrapper would hand anyone who can append to the text a denial of service.
+A candidate carrying the wrapper magic that fails to decode is reported as
+`manifest.text.corruptedWrapper`, even when another valid wrapper is present.
 
 > [!WARNING]
 > The specification is in tension here. Placement rule 5 says a validator "may

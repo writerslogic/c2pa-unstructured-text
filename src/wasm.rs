@@ -131,6 +131,7 @@ pub fn verify_data_hash(
             .collect(),
         alg: algorithm(alg)?.id().to_string(),
         hash: hash.to_vec(),
+        pad: Vec::new(),
         name: None,
     };
     hardbinding::verify_data_hash(text, &dh, &RustCrypto, &UnicodeNfc).map_err(js_err)

@@ -103,6 +103,9 @@ pub struct DataHash {
     pub alg: String,
     /// The computed digest.
     pub hash: Vec<u8>,
+    /// Required CDDL padding bytes; empty unless a claim generator reserves
+    /// additional space.
+    pub pad: Vec<u8>,
     /// Optional human-readable name for the assertion.
     pub name: Option<String>,
 }
@@ -123,10 +126,11 @@ impl DataHash {
             .map(|e| format!("{{\"start\":{},\"length\":{}}}", e.start, e.length))
             .collect();
         let mut json = format!(
-            "{{\"exclusions\":[{}],\"alg\":\"{}\",\"hash\":\"{}\"",
+            "{{\"exclusions\":[{}],\"alg\":\"{}\",\"hash\":\"{}\",\"pad\":\"{}\"",
             ranges.join(","),
             self.alg,
-            base64(&self.hash)
+            base64(&self.hash),
+            base64(&self.pad)
         );
         if let Some(name) = &self.name {
             json.push_str(&format!(",\"name\":\"{name}\""));
@@ -219,6 +223,7 @@ pub fn compute_data_hash(
         exclusions: vec![exclusion],
         alg: alg.id().to_string(),
         hash: hasher.digest(alg, &covered),
+        pad: Vec::new(),
         name: None,
     })
 }
@@ -235,12 +240,25 @@ pub fn verify_data_hash(
     hasher: &impl Hasher,
     normalizer: &impl Normalizer,
 ) -> Result<(), Error> {
-    if data_hash.exclusions.is_empty() {
-        return Err(Error::MalformedExclusion);
-    }
     let alg = Algorithm::from_id(&data_hash.alg)?;
-    let located = manifest_exclusion(text)?;
-    if !data_hash.exclusions.contains(&located) {
+    if wrapper::has_corrupted_candidate(text) {
+        return Err(Error::CorruptedWrapper);
+    }
+    // Selection is governed by the asserted exclusion: a file may carry old
+    // wrappers, but exactly one must be selected for this claim.
+    let matching = wrapper::locate_all(text)
+        .into_iter()
+        .filter(|wrapper| {
+            data_hash.exclusions.contains(&Exclusion {
+                start: wrapper.start,
+                length: wrapper.length,
+            })
+        })
+        .count();
+    if matching > 1 {
+        return Err(Error::MultipleWrappers);
+    }
+    if matching == 0 || data_hash.exclusions.len() != 1 {
         return Err(Error::MalformedExclusion);
     }
     let covered = hashed_bytes(text, &data_hash.exclusions, normalizer)?;
@@ -390,6 +408,49 @@ mod tests {
     }
 
     #[test]
+    fn an_additional_non_wrapper_exclusion_is_rejected() {
+        let asset = wrapper::embed(HOST, PAYLOAD).unwrap();
+        let mut dh =
+            compute_data_hash(&asset, Algorithm::Sha256, &SumHasher, &AsciiNormalizer).unwrap();
+        dh.exclusions.insert(
+            0,
+            Exclusion {
+                start: 0,
+                length: 1,
+            },
+        );
+        assert_eq!(
+            verify_data_hash(&asset, &dh, &SumHasher, &AsciiNormalizer),
+            Err(Error::MalformedExclusion)
+        );
+    }
+
+    #[test]
+    fn exclusions_select_one_wrapper_and_reject_selecting_many() {
+        let one = wrapper::embed(HOST, PAYLOAD).unwrap();
+        let asset = wrapper::embed(&one, b"older manifest").unwrap();
+        let wrappers = wrapper::locate_all(&asset);
+        let exclusions = wrappers
+            .iter()
+            .map(|wrapper| Exclusion {
+                start: wrapper.start,
+                length: wrapper.length,
+            })
+            .collect::<Vec<_>>();
+        let dh = DataHash {
+            exclusions,
+            alg: "sha256".into(),
+            hash: Vec::new(),
+            pad: Vec::new(),
+            name: None,
+        };
+        assert_eq!(
+            verify_data_hash(&asset, &dh, &SumHasher, &AsciiNormalizer),
+            Err(Error::MultipleWrappers)
+        );
+    }
+
+    #[test]
     fn malformed_ranges_are_rejected() {
         let asset = wrapper::embed(HOST, PAYLOAD).unwrap();
         // Out of order / overlapping.
@@ -441,11 +502,12 @@ mod tests {
             }],
             alg: "sha256".into(),
             hash: vec![0xDE, 0xAD, 0xBE, 0xEF],
+            pad: Vec::new(),
             name: None,
         };
         assert_eq!(
             dh.to_json(),
-            r#"{"exclusions":[{"start":73,"length":114}],"alg":"sha256","hash":"3q2+7w=="}"#
+            r#"{"exclusions":[{"start":73,"length":114}],"alg":"sha256","hash":"3q2+7w==","pad":""}"#
         );
     }
 
