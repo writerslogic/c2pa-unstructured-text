@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 or the MIT license,
 // at your option.
 
-//! The variation-selector byte codec (C2PA 2.4 Appendix A.8).
+//! The variation-selector byte codec from the current C2PA working draft.
 //!
 //! Maps a byte onto one invisible Unicode variation selector and back. Low
 //! nibble values `0x00..=0x0F` use the Variation Selectors block

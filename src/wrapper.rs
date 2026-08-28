@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 or the MIT license,
 // at your option.
 
-//! The `C2PATextManifestWrapper` frame (C2PA 2.4 Appendix A.8).
+//! The `C2PATextManifestWrapper` frame from the current C2PA working draft.
 //!
 //! A wrapper is a `U+FEFF` marker followed by the variation-selector encoding of
 //! `magic(8) + version(1) + big-endian length(4) + payload + optional padding`.
@@ -162,9 +162,8 @@ fn scan(text: &str, mut visit: impl FnMut(&[u8], usize, usize)) {
 
 /// Every valid v1 wrapper in `text`, in order of appearance.
 ///
-/// A candidate whose magic matches but whose frame does not decode is not a
-/// valid wrapper and is skipped, so a mangled run beside a good one does not
-/// discard the asset.
+/// A candidate whose magic matches but whose frame does not decode is not
+/// included here. [`extract`] still rejects the asset as corrupted.
 pub fn locate_all(text: &str) -> Vec<Wrapper> {
     let mut found = Vec::new();
     scan(text, |run, start, length| {
@@ -184,16 +183,13 @@ pub fn locate_all(text: &str) -> Vec<Wrapper> {
 /// [`Error::CorruptedWrapper`] (`manifest.text.corruptedWrapper`) — both are
 /// reportable failures. See [`Error::is_no_manifest_located`].
 ///
-/// A candidate that fails to decode *beside* a valid wrapper is skipped rather
-/// than reported. The corrupted-wrapper code describes text whose only wrapper
-/// is mangled; letting stray bytes carrying the magic invalidate an otherwise
-/// good wrapper would hand anyone who can append to the text a denial of
-/// service.
 pub fn extract(text: &str) -> Result<Wrapper, Error> {
+    if has_corrupted_candidate(text) {
+        return Err(Error::CorruptedWrapper);
+    }
     let mut found = locate_all(text);
     match found.len() {
         1 => Ok(found.remove(0)),
-        0 if has_candidate(text) => Err(Error::CorruptedWrapper),
         0 => Err(Error::NotFound),
         _ => Err(Error::MultipleWrappers),
     }
@@ -201,6 +197,7 @@ pub fn extract(text: &str) -> Result<Wrapper, Error> {
 
 /// Whether any marker is followed by a selector run bearing the magic, whether
 /// or not the rest of the frame decodes.
+#[cfg(feature = "checksum-v2")]
 fn has_candidate(text: &str) -> bool {
     let mut seen = false;
     scan(text, |run, _, _| {
@@ -209,6 +206,21 @@ fn has_candidate(text: &str) -> bool {
         }
     });
     seen
+}
+
+/// Whether a selector run carries the specified magic but fails to decode as
+/// the specified frame.
+pub(crate) fn has_corrupted_candidate(text: &str) -> bool {
+    let mut corrupted = false;
+    scan(text, |run, start, length| {
+        if run.len() >= MAGIC.len()
+            && run[..MAGIC.len()] == MAGIC
+            && decode_frame(run, start, length).is_none()
+        {
+            corrupted = true;
+        }
+    });
+    corrupted
 }
 
 /// The v2 frame: the v1 layout with `version = 2` and a truncated SHA-256 over
@@ -415,8 +427,8 @@ mod tests {
     }
 
     #[test]
-    fn a_mangled_candidate_beside_a_valid_one_is_ignored() {
-        // Wrong version: the candidate does not decode, so it is skipped.
+    fn a_mangled_candidate_beside_a_valid_one_is_rejected() {
+        // Wrong version: the candidate does not decode, so the asset fails.
         let mut framed = MAGIC.to_vec();
         framed.push(9);
         framed.extend_from_slice(&16u32.to_be_bytes());
@@ -424,8 +436,7 @@ mod tests {
         let bad = carry(&framed);
         let good = encode(PAYLOAD).unwrap();
         let asset = format!("{HOST}{bad}{good}");
-        let w = extract(&asset).expect("the valid wrapper is still located");
-        assert_eq!(w.payload, PAYLOAD);
+        assert_eq!(extract(&asset), Err(Error::CorruptedWrapper));
         assert_eq!(locate_all(&asset).len(), 1);
     }
 
